@@ -1,0 +1,38 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background with subtle gradient -->
+  <rect width="1024" height="1024" rx="226" fill="url(#gradient)"/>
+
+  <!-- Gradient definition -->
+  <defs>
+    <linearGradient id="gradient" x1="0" y1="0" x2="1024" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#F0F7FD"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Main icon: Pause bars with forward curve -->
+  <g transform="translate(512, 512)">
+    <!-- Left pause bar -->
+    <rect x="-160" y="-180" width="80" height="360" rx="40" fill="#2E7BC4"/>
+
+    <!-- Right pause bar -->
+    <rect x="80" y="-180" width="80" height="360" rx="40" fill="#2E7BC4"/>
+
+    <!-- Gentle forward arrow/curve suggesting "tomorrow" -->
+    <path d="M 200 -40 Q 280 -40 280 40 Q 280 120 200 120"
+          stroke="#4A90DA"
+          stroke-width="50"
+          stroke-linecap="round"
+          fill="none"
+          opacity="0.7"/>
+
+    <!-- Arrow head -->
+    <path d="M 180 90 L 220 120 L 180 150"
+          stroke="#4A90DA"
+          stroke-width="50"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          fill="none"
+          opacity="0.7"/>
+  </g>
+</svg>
