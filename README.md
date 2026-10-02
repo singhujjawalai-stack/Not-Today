@@ -1,17 +1,35 @@
-# not_today
+# Not Today
 
-A new Flutter project.
+> Park the things that can't happen today — without guilt.
 
-## Getting Started
+A minimalist Flutter app for mindful task management. Postpone items gently to tomorrow with a "Not today" gesture, review your week, and receive morning nudges.
 
-This project is a starting point for a Flutter application.
+## Features
 
-A few resources to get you started if this is your first Flutter project:
+- **Park** tasks without pressure
+- **Postpone** to tomorrow with a swipe
+- **Release** with "Done" or "Let go"
+- **Weekly review** screen
+- **Morning reminder** notifications
+- **OLED dark mode** with true black backgrounds
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+## Download
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Download the latest release APK from the [`releases/`](releases/) folder:
+
+- [Not-Today-v1.0-release.apk](releases/Not-Today-v1.0-release.apk) (51 MB)
+
+## Build
+
+```bash
+flutter pub get
+flutter run
+```
+
+## License
+
+MIT — see [LICENSE](LICENSE)
+
+---
+
+Built with Flutter · Theme: Sky-blue accent · Designed with calm in mind
