@@ -1,30 +1,41 @@
 import 'dart:convert';
+
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../models/not_today_item.dart';
 
 class StorageService {
   static const _key = 'not_today_items';
 
-  /// Released items older than this are dropped on every save to keep prefs
-  /// compact. Six weeks gives the weekly review enough look-back window.
+  /// Released items older than 60 days are dropped on every save to keep
+  /// prefs compact. That's far more history than the weekly review needs.
   static final _trimAge = const Duration(days: 60);
 
   Future<List<NotTodayItem>> loadItems() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final jsonString = prefs.getString(_key);
-      if (jsonString == null) return [];
+    final prefs = await SharedPreferences.getInstance();
+    final jsonString = prefs.getString(_key);
+    if (jsonString == null) return [];
 
-      final decoded = jsonDecode(jsonString) as List<dynamic>;
-      return decoded
-          .map((item) => NotTodayItem.fromJson(item as Map<String, dynamic>))
-          .toList();
+    final List<dynamic> decoded;
+    try {
+      decoded = jsonDecode(jsonString) as List<dynamic>;
     } catch (_) {
-      // Corrupt JSON — clear and start fresh.
-      final prefs = await SharedPreferences.getInstance();
+      // The payload itself is unreadable — clear it and start fresh.
       await prefs.remove(_key);
       return [];
     }
+
+    // Recover per item: one bad record must not discard the whole list.
+    final items = <NotTodayItem>[];
+    for (final entry in decoded) {
+      try {
+        items.add(NotTodayItem.fromJson(entry as Map<String, dynamic>));
+      } catch (e) {
+        debugPrint('StorageService: skipping unreadable item: $e');
+      }
+    }
+    return items;
   }
 
   Future<void> saveItems(List<NotTodayItem> items) async {

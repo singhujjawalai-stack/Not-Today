@@ -1,0 +1,13 @@
+# Copy this file to android/key.properties and fill in a real keystore.
+# key.properties and *.jks are gitignored — never commit signing secrets.
+#
+# Create a keystore once with:
+#   keytool -genkey -v -keystore nottoday-release.jks -keyalg RSA \
+#     -keysize 2048 -validity 10000 -alias nottoday
+#
+# storeFile is resolved relative to android/app, so ../nottoday-release.jks
+# points at android/nottoday-release.jks.
+storePassword=your-store-password
+keyPassword=your-key-password
+keyAlias=nottoday
+storeFile=../nottoday-release.jks

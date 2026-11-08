@@ -51,13 +51,13 @@ void main() {
       );
     });
 
-    test('two returns get both names', () {
+    test('two returns on the fire day get both names', () {
       final items = [
         resurfaced('a', 'Water the plants', now),
         resurfaced(
           'b',
           'Call the dentist',
-          now.subtract(const Duration(days: 1)),
+          now.subtract(const Duration(hours: 1)),
         ),
       ];
       expect(
@@ -70,9 +70,9 @@ void main() {
     test('more than two get the newest two plus the tail', () {
       final items = [
         resurfaced('a', 'Alpha', now),
-        resurfaced('b', 'Beta', now.subtract(const Duration(days: 1))),
-        resurfaced('c', 'Gamma', now.subtract(const Duration(days: 2))),
-        resurfaced('d', 'Delta', now.subtract(const Duration(days: 3))),
+        resurfaced('b', 'Beta', now.subtract(const Duration(hours: 1))),
+        resurfaced('c', 'Gamma', now.subtract(const Duration(hours: 2))),
+        resurfaced('d', 'Delta', now.subtract(const Duration(hours: 3))),
       ];
       expect(
         buildNudgeBody(items, now),
@@ -80,10 +80,47 @@ void main() {
       );
     });
 
+    test('an item that returned on an earlier day is not named again', () {
+      final items = [
+        resurfaced(
+          'a',
+          'Water the plants',
+          now.subtract(const Duration(days: 1)),
+        ),
+        resurfaced(
+          'b',
+          'Call the dentist',
+          now.subtract(const Duration(days: 3)),
+        ),
+      ];
+      expect(
+        buildNudgeBody(items, now),
+        'Your parked things are still there. No pressure.',
+      );
+    });
+
+    test("tomorrow's nudge names what returns tomorrow", () {
+      final tomorrow = now.add(const Duration(days: 1));
+      final items = [
+        resurfaced(
+          'a',
+          'Water the plants',
+          DateTime(tomorrow.year, tomorrow.month, tomorrow.day),
+        ),
+      ];
+      expect(
+        buildNudgeBody(items, tomorrow),
+        'Back on the list: Water the plants. Or not. No pressure.',
+      );
+    });
+
     test('released items are not named', () {
       final items = [
-        resurfaced('a', 'Water the plants', now)
-            .release(ReleaseKind.letGo, now),
+        resurfaced(
+          'a',
+          'Water the plants',
+          now,
+        ).release(ReleaseKind.letGo, now),
       ];
       expect(
         buildNudgeBody(items, now),
@@ -107,11 +144,7 @@ void main() {
           text: 'Water the plants',
           parkedAt: DateTime.now(),
         ),
-        NotTodayItem(
-          id: 'b',
-          text: 'Fix the faucet',
-          parkedAt: DateTime.now(),
-        ),
+        NotTodayItem(id: 'b', text: 'Fix the faucet', parkedAt: DateTime.now()),
       ];
       expect(
         buildTestNudgeBody(items),

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
+
 import '../models/not_today_item.dart';
 import '../services/reminder_service.dart';
 import '../services/storage_service.dart';
@@ -18,10 +19,14 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final _storageService = StorageService();
   final _reminder = ReminderService();
   final GlobalKey<AnimatedListState> _listKey = GlobalKey<AnimatedListState>();
+
+  /// True until the first storage read finishes, so the empty state doesn't
+  /// flash on every launch.
+  bool _loading = true;
 
   /// Everything the app knows: parked items plus recent history.
   List<NotTodayItem> _allItems = [];
@@ -41,15 +46,21 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    unawaited(_reminder.initialize());
+    WidgetsBinding.instance.addObserver(this);
     _load();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _returnTimer?.cancel();
     _returnBannerTimer?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _resurfaceDueItems();
   }
 
   /// Schedule (or clear) a timer so when a postponed item becomes visible
@@ -58,12 +69,12 @@ class _HomeScreenState extends State<HomeScreen> {
   void _scheduleReturnRefresh() {
     _returnTimer?.cancel();
     final hidden = _allItems.where(
-        (i) => i.isParked && i.isPostponedNow(DateTime.now()),
-      );
+      (i) => i.isParked && i.isPostponedNow(DateTime.now()),
+    );
     if (hidden.isEmpty) return;
-    final firstReturn = hidden.map((i) => i.postponedUntil!).reduce(
-          (a, b) => a.isBefore(b) ? a : b,
-        );
+    final firstReturn = hidden
+        .map((i) => i.postponedUntil!)
+        .reduce((a, b) => a.isBefore(b) ? a : b);
     final delay = firstReturn.difference(DateTime.now());
     if (delay.inMilliseconds <= 0) return; // already due; resurface below
     _returnTimer = Timer(delay, _resurfaceDueItems);
@@ -106,9 +117,14 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _allItems = items;
       _parked = items.where(_visibleNow).toList();
+      _loading = false;
     });
-    _reminder.setItems(items);
     _scheduleReturnRefresh();
+    // Set the items before initializing: initialize() schedules the nudge and
+    // must see the real list, otherwise the first body says "nothing on the
+    // list" even when items exist.
+    await _reminder.setItems(items);
+    await _reminder.initialize();
   }
 
   /// Items that belong on the main list at [now]: parked and not set aside
@@ -117,17 +133,19 @@ class _HomeScreenState extends State<HomeScreen> {
       item.isParked && !item.isPostponedNow(DateTime.now());
 
   /// How many items are parked but currently hidden by "Not today".
-  int get _hiddenCount =>
-      _allItems.where((i) => i.isParked && i.isPostponedNow(DateTime.now())).length;
+  int get _hiddenCount => _allItems
+      .where((i) => i.isParked && i.isPostponedNow(DateTime.now()))
+      .length;
 
   Future<void> _save() async {
     await _storageService.saveItems(_allItems);
-    _reminder.setItems(_allItems);
+    await _reminder.setItems(_allItems);
   }
 
   void _showSnack(String message) {
+    // Queue instead of replacing: a release's Undo must stay tappable even if
+    // something is postponed right after.
     final messenger = ScaffoldMessenger.of(context);
-    messenger.hideCurrentSnackBar();
     messenger.showSnackBar(
       SnackBar(
         content: Text(message),
@@ -201,8 +219,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _insertIntoParked(NotTodayItem item) {
     if (!_visibleNow(item)) return false;
     if (_parked.any((p) => p.id == item.id)) return false;
-    final index =
-        _parked.indexWhere((p) => p.parkedAt.isBefore(item.parkedAt));
+    final index = _parked.indexWhere((p) => p.parkedAt.isBefore(item.parkedAt));
     final at = index == -1 ? _parked.length : index;
     setState(() => _parked.insert(at, item));
     _listKey.currentState?.insertItem(at);
@@ -266,10 +283,8 @@ class _HomeScreenState extends State<HomeScreen> {
   void _openReview() {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => WeeklyReviewScreen(
-          allItems: _allItems,
-          onRepark: _repark,
-        ),
+        builder: (_) =>
+            WeeklyReviewScreen(allItems: _allItems, onRepark: _repark),
       ),
     );
   }
@@ -373,7 +388,9 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 6),
             Expanded(
-              child: _parked.isEmpty
+              child: _loading
+                  ? const SizedBox.shrink()
+                  : _parked.isEmpty
                   ? EmptyState(postponedCount: _hiddenCount)
                   : AnimatedList(
                       key: _listKey,
@@ -397,8 +414,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 key: ValueKey(item.id),
                                 item: item,
                                 onPostpone: () => _postpone(item),
-                                onDone: () =>
-                                    _release(item, ReleaseKind.done),
+                                onDone: () => _release(item, ReleaseKind.done),
                                 onLetGo: () =>
                                     _release(item, ReleaseKind.letGo),
                               ),
@@ -421,6 +437,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   String _countLine() {
+    if (_loading) return '';
     // Momentary note when the new-day resurface puts items back.
     if (_justReturned > 0) {
       final n = _justReturned;

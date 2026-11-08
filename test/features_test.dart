@@ -41,8 +41,9 @@ void main() {
     expect(find.text('Not today'), findsNothing);
   });
 
-  testWidgets('undo: a release can be taken back within the grace window',
-      (tester) async {
+  testWidgets('undo: a release can be taken back within the grace window', (
+    tester,
+  ) async {
     SharedPreferences.setMockInitialValues({});
     await tester.pumpWidget(const NotTodayApp());
     await tester.pumpAndSettle();
@@ -72,6 +73,44 @@ void main() {
     expect(find.text("Let go. That's allowed."), findsNothing);
   });
 
+  testWidgets('undo survives a postpone that happens right after a release', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    await tester.pumpWidget(const NotTodayApp());
+    await tester.pumpAndSettle();
+
+    Future<void> park(String text) async {
+      await tester.tap(find.byIcon(Icons.add_rounded));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), text);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Park it'));
+      await tester.pumpAndSettle();
+    }
+
+    await park('First task');
+    await park('Second task');
+
+    // Release the first, then immediately postpone the second.
+    await tester.tap(find.text('First task'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Let it go'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Second task'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Not today'));
+    await tester.pumpAndSettle();
+
+    // The postpone message queues behind the release instead of replacing it.
+    expect(find.text('Undo'), findsOneWidget);
+
+    await tester.tap(find.text('Undo'));
+    await tester.pumpAndSettle();
+    expect(find.text('First task'), findsOneWidget);
+  });
+
   testWidgets('review: shows longest-carried, reframes let-go, and brings '
       'an item back', (tester) async {
     final today = DateTime.now();
@@ -82,11 +121,7 @@ void main() {
       // weekday the test runs on. The released items are stamped at day+1h
       // and day+2h — still inside today, still in-week, but parked after
       // p1 so p1 remains the longest-carried.
-      NotTodayItem(
-        id: 'p1',
-        text: 'Fix the leaking faucet',
-        parkedAt: day,
-      ),
+      NotTodayItem(id: 'p1', text: 'Fix the leaking faucet', parkedAt: day),
       NotTodayItem(
         id: 'l1',
         text: 'That ambitious side project',
@@ -104,12 +139,14 @@ void main() {
     ];
 
     NotTodayItem? broughtBack;
-    await tester.pumpWidget(MaterialApp(
-      home: WeeklyReviewScreen(
-        allItems: items,
-        onRepark: (item) => broughtBack = item,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: WeeklyReviewScreen(
+          allItems: items,
+          onRepark: (item) => broughtBack = item,
+        ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
 
     // Tally row: Parked counts everything parked this week (3, all still
@@ -137,8 +174,9 @@ void main() {
     expect(find.text('Bring back'), findsOneWidget); // only one left
   });
 
-  testWidgets('review: an item postponed 3× this week gets a gentle question',
-      (tester) async {
+  testWidgets('review: an item postponed 3× this week gets a gentle question', (
+    tester,
+  ) async {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final monday = today.subtract(Duration(days: today.weekday - 1));
@@ -167,12 +205,11 @@ void main() {
       ),
     ];
 
-    await tester.pumpWidget(MaterialApp(
-      home: WeeklyReviewScreen(
-        allItems: items,
-        onRepark: (_) {},
+    await tester.pumpWidget(
+      MaterialApp(
+        home: WeeklyReviewScreen(allItems: items, onRepark: (_) {}),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
 
     // The offender is named; the twice-postponed item stays unremarkable.
@@ -180,10 +217,7 @@ void main() {
       find.textContaining('Follow up on the grant followed you 3× this week'),
       findsOneWidget,
     );
-    expect(
-      find.textContaining('Is it actually yours to do?'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('Is it actually yours to do?'), findsOneWidget);
     expect(find.textContaining('followed you 2×'), findsNothing);
   });
 
@@ -197,18 +231,16 @@ void main() {
     final weekAge = today.weekday - 1; // 0 .. 6
     final monday = today.subtract(Duration(days: weekAge));
 
-    await tester.pumpWidget(MaterialApp(
-      home: WeeklyReviewScreen(
-        allItems: [
-          NotTodayItem(
-            id: 'old',
-            text: 'Water the plants',
-            parkedAt: monday,
-          ),
-        ],
-        onRepark: (_) {},
+    await tester.pumpWidget(
+      MaterialApp(
+        home: WeeklyReviewScreen(
+          allItems: [
+            NotTodayItem(id: 'old', text: 'Water the plants', parkedAt: monday),
+          ],
+          onRepark: (_) {},
+        ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
 
     // _ageLabel speaks only for items 2+ calendar days old (Monday has none,
@@ -221,26 +253,29 @@ void main() {
 
     // A same-day item gets no age note — the "since …" date is enough.
     // A fresh key so the State (which caches _items) is rebuilt.
-    await tester.pumpWidget(MaterialApp(
-      home: WeeklyReviewScreen(
-        key: UniqueKey(),
-        allItems: [
-          NotTodayItem(
-            id: 'fresh',
-            text: 'Water the plants',
-            parkedAt: today,
-          ),
-        ],
-        onRepark: (_) {},
+    await tester.pumpWidget(
+      MaterialApp(
+        home: WeeklyReviewScreen(
+          key: UniqueKey(),
+          allItems: [
+            NotTodayItem(
+              id: 'fresh',
+              text: 'Water the plants',
+              parkedAt: today,
+            ),
+          ],
+          onRepark: (_) {},
+        ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
 
     expect(find.textContaining("That's"), findsNothing);
   });
 
-  testWidgets('reminder sheet: gear icon opens sheet, toggle is interactive',
-      (tester) async {
+  testWidgets('reminder sheet: gear icon opens sheet, toggle is interactive', (
+    tester,
+  ) async {
     SharedPreferences.setMockInitialValues({});
     await tester.pumpWidget(const NotTodayApp());
     await tester.pumpAndSettle();

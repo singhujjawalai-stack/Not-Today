@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:not_today/models/not_today_item.dart';
 import 'package:not_today/services/storage_service.dart';
@@ -43,6 +45,18 @@ void main() {
       expect(restored.postponedDates, isEmpty);
     });
 
+    test('old JSON backfills postponedDates from lastPostponedAt', () {
+      final restored = NotTodayItem.fromJson({
+        'id': 'abc',
+        'text': 'Call the dentist',
+        'parkedAt': DateTime(2026, 9, 7, 10, 30).toIso8601String(),
+        'lastPostponedAt': DateTime(2026, 9, 9, 8).toIso8601String(),
+        'postponeCount': 3,
+      });
+
+      expect(restored.postponedDates, [DateTime(2026, 9, 9, 8)]);
+    });
+
     test('released items round-trip with kind', () {
       final item = NotTodayItem(
         id: 'abc',
@@ -75,8 +89,27 @@ void main() {
       // A second "not today" keeps watching the pattern unfold.
       final again = postponed.postpone(DateTime(2026, 9, 3, 9));
       expect(again.postponeCount, 2);
-      expect(again.postponedDates,
-          [DateTime(2026, 9, 2, 11), DateTime(2026, 9, 3, 9)]);
+      expect(again.postponedDates, [
+        DateTime(2026, 9, 2, 11),
+        DateTime(2026, 9, 3, 9),
+      ]);
+    });
+
+    test('postpone drops history older than 60 days', () {
+      final old = DateTime(2026, 1, 1);
+      final when = DateTime(2026, 9, 1);
+      final item = NotTodayItem(
+        id: 'abc',
+        text: 'Reorganize the drawer',
+        parkedAt: old,
+        postponedDates: [old],
+        postponeCount: 1,
+      );
+
+      final postponed = item.postpone(when);
+
+      expect(postponed.postponedDates, [when]);
+      expect(postponed.postponeCount, 2);
     });
 
     test('postpone sets the item aside until the next calendar day', () {
@@ -145,18 +178,19 @@ void main() {
       SharedPreferences.setMockInitialValues({});
       final storage = StorageService();
 
+      final now = DateTime.now();
       final items = [
         NotTodayItem(
           id: '1',
           text: 'Write thank-you note',
-          parkedAt: DateTime(2026, 9, 7),
+          parkedAt: now.subtract(const Duration(days: 2)),
           postponeCount: 1,
         ),
         NotTodayItem(
           id: '2',
           text: 'Clean the garage',
-          parkedAt: DateTime(2026, 9, 6),
-        ).release(ReleaseKind.done, DateTime(2026, 9, 8)),
+          parkedAt: now.subtract(const Duration(days: 3)),
+        ).release(ReleaseKind.done, now.subtract(const Duration(days: 1))),
       ];
 
       await storage.saveItems(items);
@@ -180,6 +214,47 @@ void main() {
       // Key was cleared so a fresh load is also empty.
       final again = await storage.loadItems();
       expect(again, isEmpty);
+    });
+
+    test('one unreadable record does not discard the rest', () async {
+      final good = NotTodayItem(
+        id: 'good',
+        text: 'Keep me',
+        parkedAt: DateTime.now(),
+      ).toJson();
+      SharedPreferences.setMockInitialValues({
+        'not_today_items': jsonEncode([
+          good,
+          {'id': 'missing-fields'},
+        ]),
+      });
+
+      final loaded = await StorageService().loadItems();
+
+      expect(loaded.length, 1);
+      expect(loaded.single.id, 'good');
+    });
+
+    test('released history older than 60 days is trimmed on save', () async {
+      SharedPreferences.setMockInitialValues({});
+      final storage = StorageService();
+      final now = DateTime.now();
+
+      NotTodayItem released(String id, Duration age) => NotTodayItem(
+        id: id,
+        text: id,
+        parkedAt: now.subtract(age + const Duration(days: 1)),
+      ).release(ReleaseKind.done, now.subtract(age));
+
+      await storage.saveItems([
+        released('ancient', const Duration(days: 61)),
+        released('recent', const Duration(days: 59)),
+        NotTodayItem(id: 'parked', text: 'parked', parkedAt: now),
+      ]);
+
+      final loaded = await storage.loadItems();
+
+      expect(loaded.map((i) => i.id), ['recent', 'parked']);
     });
   });
 }

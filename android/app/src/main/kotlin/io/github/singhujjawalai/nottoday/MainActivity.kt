@@ -1,4 +1,4 @@
-package com.example.not_today
+package io.github.singhujjawalai.nottoday
 
 import io.flutter.embedding.android.FlutterActivity
 

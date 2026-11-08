@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
+
 import '../services/reminder_service.dart';
 
 /// One quiet decision: a gentle check-in when parked things come back.
@@ -42,10 +44,7 @@ class _ReminderSheetState extends State<ReminderSheet> {
   }
 
   Future<void> _pickTime() async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: _time,
-    );
+    final picked = await showTimePicker(context: context, initialTime: _time);
     if (picked == null) return;
     setState(() => _time = picked);
     await _save();
@@ -57,7 +56,9 @@ class _ReminderSheetState extends State<ReminderSheet> {
     final textTheme = Theme.of(context).textTheme;
 
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
       child: Container(
         decoration: BoxDecoration(
           color: colors.surface,
@@ -148,30 +149,30 @@ class _ReminderSheetState extends State<ReminderSheet> {
                   ),
                 ),
               ],
-              // ── DEBUG: manual trigger — remove after testing ──
-              const SizedBox(height: 12),
-              OutlinedButton.icon(
-                onPressed: () async {
-                  final messenger = ScaffoldMessenger.of(context);
-                  final navigator = Navigator.of(context);
-                  final sent = await widget.reminder.fireNow();
-                  if (!mounted) return;
-                  navigator.pop();
-                  messenger.showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        sent
-                            ? 'Test notification sent. Check your status bar.'
-                            : 'Could not send notification. Please enable notification permission in Settings.',
+              if (kDebugMode) ...[
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final messenger = ScaffoldMessenger.of(context);
+                    final navigator = Navigator.of(context);
+                    final sent = await widget.reminder.fireNow();
+                    if (!mounted) return;
+                    navigator.pop();
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          sent
+                              ? 'Test notification sent. Check your status bar.'
+                              : 'Could not send notification. Please enable notification permission in Settings.',
+                        ),
+                        duration: const Duration(seconds: 3),
                       ),
-                      duration: const Duration(seconds: 3),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.bug_report_rounded, size: 18),
-                label: const Text('Test notification now'),
-              ),
-              // ── END DEBUG ──
+                    );
+                  },
+                  icon: const Icon(Icons.bug_report_rounded, size: 18),
+                  label: const Text('Test notification now'),
+                ),
+              ],
             ],
           ),
         ),
