@@ -273,29 +273,153 @@ void main() {
     expect(find.textContaining("That's"), findsNothing);
   });
 
-  testWidgets('reminder sheet: gear icon opens sheet, toggle is interactive', (
+  testWidgets('edit: rewording a parked item keeps everything else intact', (
     tester,
   ) async {
     SharedPreferences.setMockInitialValues({});
     await tester.pumpWidget(const NotTodayApp());
     await tester.pumpAndSettle();
 
-    // Tap the gear icon to open the reminder sheet.
-    await tester.tap(find.byIcon(Icons.notifications_none_rounded));
+    await tester.tap(find.byIcon(Icons.add_rounded));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'Declutter the desk');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Park it'));
     await tester.pumpAndSettle();
 
-    // Sheet shows "Morning nudge" title and the toggle label.
+    // Expand and choose Edit.
+    await tester.tap(find.text('Declutter the desk'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Edit'));
+    await tester.pumpAndSettle();
+
+    // The edit sheet is the same quiet sheet, prefilled.
+    expect(find.text('Say it a little differently'), findsOneWidget);
+    expect(find.text('Keep as is'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField), 'Clear the whole desk');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save changes'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Clear the whole desk'), findsOneWidget);
+    expect(find.text('Declutter the desk'), findsNothing);
+    expect(find.text('1 thing parked · no rush'), findsOneWidget);
+  });
+
+  testWidgets('delete: a parked item can be removed, then brought back', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    await tester.pumpWidget(const NotTodayApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.add_rounded));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'Declutter the desk');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Park it'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Declutter the desk'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Remove'));
+    await tester.pumpAndSettle();
+
+    // Gone, quietly, with the usual escape hatch.
+    expect(find.text('Declutter the desk'), findsNothing);
+    expect(find.text('Removed.'), findsOneWidget);
+    expect(find.text('Nothing waiting.'), findsOneWidget);
+
+    await tester.tap(find.text('Undo'));
+    await tester.pumpAndSettle();
+    expect(find.text('Declutter the desk'), findsOneWidget);
+    expect(find.text('Nothing waiting.'), findsNothing);
+  });
+
+  testWidgets('postpone: "Not today" can be taken back too', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    await tester.pumpWidget(const NotTodayApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.add_rounded));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'Declutter the desk');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Park it'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Declutter the desk'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Not today'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Declutter the desk'), findsNothing);
+    expect(find.text('Back tomorrow.'), findsOneWidget);
+
+    // Undo restores it, exactly as it was.
+    await tester.tap(find.text('Undo'));
+    await tester.pumpAndSettle();
+    expect(find.text('Declutter the desk'), findsOneWidget);
+    expect(find.text('1 thing parked · no rush'), findsOneWidget);
+  });
+
+  testWidgets('resting: a postponed item can be brought back early', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    await tester.pumpWidget(const NotTodayApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.add_rounded));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'Declutter the desk');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Park it'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Declutter the desk'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Not today'));
+    await tester.pumpAndSettle();
+
+    // Gone from the list, resting on the quiet shelf.
+    expect(find.text('Declutter the desk'), findsNothing);
+    expect(find.text('Resting until tomorrow'), findsOneWidget);
+
+    // Open the shelf and bring it back — suddenly there's time today.
+    await tester.tap(find.text('Resting until tomorrow'));
+    await tester.pumpAndSettle();
+    expect(find.text('Back tomorrow'), findsOneWidget);
+    await tester.tap(find.text('Bring back'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Declutter the desk'), findsOneWidget);
+    expect(find.text('Resting until tomorrow'), findsNothing);
+    expect(find.text('1 thing parked · no rush'), findsOneWidget);
+  });
+
+  testWidgets('settings: opens from the tune icon; nudge and backup rows', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    await tester.pumpWidget(const NotTodayApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.tune_rounded));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Settings'), findsOneWidget);
     expect(find.text('Morning nudge'), findsOneWidget);
     expect(find.text('Gentle nudge'), findsOneWidget);
-
-    // The switch is off by default, subtitle shows "Off — the app stays silent."
     expect(find.text('Off — the app stays silent.'), findsOneWidget);
+    expect(find.text('Save a backup'), findsOneWidget);
+    expect(find.text('Restore a backup'), findsOneWidget);
 
     // Toggle it on.
     await tester.tap(find.byType(Switch));
     await tester.pumpAndSettle();
 
-    // After toggle: "Off" subtitle gone, "Change the time" button appears.
     expect(find.text('Off — the app stays silent.'), findsNothing);
     expect(find.text('Change the time'), findsOneWidget);
   });

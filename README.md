@@ -12,7 +12,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2E7BC4" alt="MIT License"/></a>
   <img src="https://img.shields.io/badge/platform-Android-2E7BC4" alt="Platform: Android"/>
   <img src="https://img.shields.io/badge/Flutter-3.13-027DFD?logo=flutter&logoColor=white" alt="Flutter"/>
-  <img src="https://img.shields.io/badge/version-1.0.1-4A90DA" alt="Version 1.0.1"/>
+  <img src="https://img.shields.io/badge/version-1.1.0-4A90DA" alt="Version 1.1.0"/>
 </p>
 
 ---
@@ -27,14 +27,18 @@ No account. No sync. No streak to protect.
 
 - **Park in one line.** Add a thought, a chore, or a conversation in a single
   field. Nothing needs a due date, a project, or a priority.
-- **"Not today" that means tomorrow.** Postponed items leave the list and return
-  on their own when the day turns — even if the app is in the background.
+- **"Not today" that means tomorrow.** Postponed items leave the list and
+  return on their own when the day turns — even if the app is in the
+  background. Found time today? Bring one back from the resting shelf.
 - **Three gentle exits.** Tap a parked item to reveal *Not today*, *I did it*,
   and *Let it go*. Releasing something is treated as progress, not failure.
-- **Instant Undo.** Every release has a short grace period, so nothing is ever
-  gone by accident.
+  *Edit* and *Remove* sit quietly below them for housekeeping.
+- **Undo everywhere.** Every exit — postpone, done, let go, remove — has a
+  short grace period, so nothing is ever gone by accident.
 - **Weekly review.** A quiet summary of what you parked, finished, and let go —
   plus the item you've carried the longest and the one you keep postponing.
+- **Backups.** Save the whole list as one small JSON file and restore it any
+  time; restoring merges, it never wipes.
 - **Optional morning nudge.** One daily notification, only when it's useful.
   It names just the items returning that day, and says nothing on quiet days.
 - **OLED-first design.** True-black dark theme, clean light theme, and a single
@@ -46,21 +50,21 @@ No account. No sync. No streak to protect.
 
 | Screen | Purpose |
 | --- | --- |
-| **Home** | The parked list, with a single-line count and a gentle empty state. |
+| **Home** | The parked list, a single-line count, and the resting shelf for items set aside with "Not today". |
 | **This week** | Parked / did / let-go stats, the longest-carried item, and a mirror for anything postponed three or more times in a week. |
-| **Morning nudge** | Toggle the daily reminder and pick its time. Saved immediately. |
+| **Settings** | The morning nudge toggle and time, plus backup save and restore. |
 
 ## Download
 
-The latest build lives in [`releases/`](releases):
+Per-ABI builds live in [`releases/`](releases) — pick the one matching your
+device (most phones are arm64-v8a):
 
-- **v1.0.1** — [Not-Today-v1.0.1-release.apk](releases/Not-Today-v1.0.1-release.apk)
+- **arm64-v8a** — [Not-Today-v1.1.0-arm64-v8a-release.apk](releases/Not-Today-v1.1.0-arm64-v8a-release.apk)
+- **armeabi-v7a** (older 32-bit devices) — [Not-Today-v1.1.0-armeabi-v7a-release.apk](releases/Not-Today-v1.1.0-armeabi-v7a-release.apk)
+- **x86_64** (emulators) — [Not-Today-v1.1.0-x86_64-release.apk](releases/Not-Today-v1.1.0-x86_64-release.apk)
 
 Requires Android 7.0 (API 24) or newer. Install with `adb install <file>` or by
 opening the APK on your device.
-
-> The committed artifact is a universal APK. Release builds can also be produced
-> per ABI for smaller downloads — see below.
 
 ## Building from source
 
@@ -121,6 +125,7 @@ be published.
 | Storage | `shared_preferences` with local JSON |
 | Notifications | `flutter_local_notifications` + `timezone` |
 | Formatting | `intl` |
+| Files | `file_picker` (Storage Access Framework) |
 | IDs | `uuid` |
 
 ## Project layout

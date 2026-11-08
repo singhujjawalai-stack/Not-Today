@@ -127,6 +127,28 @@ void main() {
       expect(postponed.isPostponedNow(DateTime(2026, 9, 3)), isFalse);
     });
 
+    test('unpostpone brings the item back now but keeps the honest history', () {
+      final item = NotTodayItem(
+        id: 'abc',
+        text: 'Mail the passport',
+        parkedAt: DateTime(2026, 9, 1),
+        postponedDates: [DateTime(2026, 8, 30), DateTime(2026, 9, 2)],
+        postponeCount: 2,
+      ).postpone(DateTime(2026, 9, 3, 10));
+
+      final back = item.unpostpone();
+
+      expect(back.postponedUntil, isNull);
+      expect(back.isPostponedNow(DateTime(2026, 9, 3, 11)), isFalse);
+      expect(back.postponeCount, 3); // the "not today" still happened
+      expect(back.postponedDates, [
+        DateTime(2026, 8, 30),
+        DateTime(2026, 9, 2),
+        DateTime(2026, 9, 3, 10),
+      ]);
+      expect(back.isParked, isTrue);
+    });
+
     test('bringBack returns a released item to the parked list', () {
       final released = NotTodayItem(
         id: 'abc',

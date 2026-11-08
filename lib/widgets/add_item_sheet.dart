@@ -1,15 +1,41 @@
 import 'package:flutter/material.dart';
 
 /// One quiet line of text — returns the trimmed string, or null if cancelled.
+/// Doubles as the edit sheet: pass [initialText] and gentler labels.
 class AddItemSheet extends StatefulWidget {
-  const AddItemSheet({super.key});
+  const AddItemSheet({
+    super.key,
+    this.initialText,
+    this.title = 'What can wait until another day?',
+    this.actionLabel = 'Park it',
+    this.cancelLabel = 'Not now',
+  });
+
+  final String? initialText;
+  final String title;
+  final String actionLabel;
+  final String cancelLabel;
 
   @override
   State<AddItemSheet> createState() => _AddItemSheetState();
 }
 
 class _AddItemSheetState extends State<AddItemSheet> {
-  final _controller = TextEditingController();
+  late final _controller = TextEditingController(text: widget.initialText);
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialText != null) {
+      // Start with the cursor at the end, the text already selected for a
+      // quick overwrite.
+      _controller.selection = TextSelection(
+        baseOffset: widget.initialText!.length,
+        extentOffset: widget.initialText!.length,
+      );
+    }
+  }
+
 
   @override
   void dispose() {
@@ -56,7 +82,7 @@ class _AddItemSheetState extends State<AddItemSheet> {
               ),
               const SizedBox(height: 22),
               Text(
-                'What can wait until another day?',
+                widget.title,
                 style: textTheme.headlineSmall,
               ),
               const SizedBox(height: 20),
@@ -88,7 +114,7 @@ class _AddItemSheetState extends State<AddItemSheet> {
                   TextButton(
                     onPressed: () => Navigator.of(context).pop(),
                     child: Text(
-                      'Not now',
+                      widget.cancelLabel,
                       style: TextStyle(color: colors.onSurfaceVariant),
                     ),
                   ),
@@ -111,7 +137,7 @@ class _AddItemSheetState extends State<AddItemSheet> {
                             vertical: 14,
                           ),
                         ),
-                        child: const Text('Park it'),
+                        child: Text(widget.actionLabel),
                       );
                     },
                   ),

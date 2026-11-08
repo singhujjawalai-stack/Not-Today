@@ -71,6 +71,35 @@ class NotTodayItem {
     releasedAt: releasedAt,
   );
 
+  /// Reword the item. Everything else stays exactly as it was — the parked
+  /// date, the postpone history, and any release state are all preserved.
+  NotTodayItem edit(String text) => NotTodayItem(
+    id: id,
+    text: text,
+    parkedAt: parkedAt,
+    lastPostponedAt: lastPostponedAt,
+    postponeCount: postponeCount,
+    postponedDates: postponedDates,
+    postponedUntil: postponedUntil,
+    releasedAs: releasedAs,
+    releasedAt: releasedAt,
+  );
+
+  /// Change your mind: the item is back on the main list right now. The
+  /// honest history — the count and the dates — stays untouched; only the
+  /// hidden-until-tomorrow state clears.
+  NotTodayItem unpostpone() => NotTodayItem(
+    id: id,
+    text: text,
+    parkedAt: parkedAt,
+    lastPostponedAt: lastPostponedAt,
+    postponeCount: postponeCount,
+    postponedDates: postponedDates,
+    postponedUntil: null,
+    releasedAs: releasedAs,
+    releasedAt: releasedAt,
+  );
+
   /// Retract a release and put the item back on the parked list. Used from
   /// the weekly review ("bring it back") for things that were let go.
   NotTodayItem bringBack() => NotTodayItem(

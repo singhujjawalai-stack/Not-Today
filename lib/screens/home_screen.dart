@@ -4,12 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/not_today_item.dart';
+import '../services/backup_service.dart';
 import '../services/reminder_service.dart';
 import '../services/storage_service.dart';
 import '../widgets/add_item_sheet.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/parked_item_card.dart';
-import '../widgets/reminder_sheet.dart';
+import '../widgets/resting_panel.dart';
+import '../widgets/settings_sheet.dart';
 import 'weekly_review_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -22,7 +24,11 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final _storageService = StorageService();
   final _reminder = ReminderService();
-  final GlobalKey<AnimatedListState> _listKey = GlobalKey<AnimatedListState>();
+  final _backup = BackupService();
+
+  /// Recreated whenever the parked list is replaced wholesale (a restore) —
+  /// an AnimatedList can only be initialized once.
+  GlobalKey<AnimatedListState> _listKey = GlobalKey<AnimatedListState>();
 
   /// True until the first storage read finishes, so the empty state doesn't
   /// flash on every launch.
@@ -137,19 +143,60 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       .where((i) => i.isParked && i.isPostponedNow(DateTime.now()))
       .length;
 
+  /// The hidden items themselves, for the resting shelf.
+  List<NotTodayItem> get _restingItems => _allItems
+      .where((i) => i.isParked && i.isPostponedNow(DateTime.now()))
+      .toList();
+
+  /// Suddenly there's time today: take a resting item back onto the list.
+  /// The postpone still counts in history — it did happen.
+  void _bringBackToday(NotTodayItem item) {
+    final allIndex = _allItems.indexWhere((i) => i.id == item.id);
+    if (allIndex == -1) return;
+    final woken = item.unpostpone();
+    setState(() => _allItems[allIndex] = woken);
+    _insertIntoParked(woken);
+    _save();
+    _scheduleReturnRefresh();
+    _showSnack('Back on the list.');
+  }
+
   Future<void> _save() async {
     await _storageService.saveItems(_allItems);
     await _reminder.setItems(_allItems);
   }
 
-  void _showSnack(String message) {
-    // Queue instead of replacing: a release's Undo must stay tappable even if
-    // something is postponed right after.
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.showSnackBar(
+  /// One snackbar shape for the whole app: a quiet message, optionally with
+  /// an Undo escape hatch.
+  void _showSnack(String message, {VoidCallback? undo}) {
+    ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        duration: const Duration(milliseconds: 2200),
+        duration: const Duration(seconds: 3),
+        action: undo == null
+            ? null
+            : SnackBarAction(label: 'Undo', onPressed: undo),
+      ),
+    );
+  }
+
+  /// The removal animation shared by postpone, release, and delete.
+  Widget _removalTransition(NotTodayItem item, Animation<double> animation) {
+    return SizeTransition(
+      sizeFactor: animation,
+      child: FadeTransition(
+        opacity: animation,
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: ParkedItemCard(
+            item: item,
+            onPostpone: () {},
+            onDone: () {},
+            onLetGo: () {},
+            onEdit: () {},
+            onDelete: () {},
+          ),
+        ),
       ),
     );
   }
@@ -177,6 +224,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   void _postpone(NotTodayItem item) {
+    // Keep the pre-postpone state: Undo restores it whole, so the item
+    // reappears exactly as it was.
+    final previous = item;
     final postponed = item.postpone(DateTime.now());
     final allIndex = _allItems.indexWhere((i) => i.id == item.id);
     if (allIndex != -1) {
@@ -189,21 +239,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (index != -1) {
       _listKey.currentState?.removeItem(
         index,
-        (context, animation) => SizeTransition(
-          sizeFactor: animation,
-          child: FadeTransition(
-            opacity: animation,
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: ParkedItemCard(
-                item: item,
-                onPostpone: () {},
-                onDone: () {},
-                onLetGo: () {},
-              ),
-            ),
-          ),
-        ),
+        (context, animation) => _removalTransition(item, animation),
         duration: const Duration(milliseconds: 280),
       );
       setState(() => _parked.removeAt(index));
@@ -211,7 +247,81 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     _save();
     _scheduleReturnRefresh();
-    _showSnack('Back tomorrow.');
+    _showSnack('Back tomorrow.', undo: () => _undoPostpone(previous));
+  }
+
+  /// Take back a "Not today": the item returns to the list as it was.
+  void _undoPostpone(NotTodayItem previous) {
+    final allIndex = _allItems.indexWhere((i) => i.id == previous.id);
+    if (allIndex == -1) return;
+    setState(() => _allItems[allIndex] = previous);
+    _insertIntoParked(previous);
+    _save();
+    _scheduleReturnRefresh();
+  }
+
+  /// Reword a parked item in place — no dates move, nothing restarts.
+  Future<void> _editItem(NotTodayItem item) async {
+    final text = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => AddItemSheet(
+        initialText: item.text,
+        title: 'Say it a little differently',
+        actionLabel: 'Save changes',
+        cancelLabel: 'Keep as is',
+      ),
+    );
+    if (text == null || text == item.text) return;
+
+    final edited = item.edit(text);
+    final allIndex = _allItems.indexWhere((i) => i.id == item.id);
+    final parkedIndex = _parked.indexWhere((i) => i.id == item.id);
+    if (allIndex == -1) return;
+    setState(() {
+      _allItems[allIndex] = edited;
+      if (parkedIndex != -1) _parked[parkedIndex] = edited;
+    });
+    _save();
+  }
+
+  /// Remove a parked item outright. Undoable for the usual grace period —
+  /// nothing is ever really gone by accident.
+  void _deleteItem(NotTodayItem item) {
+    final allIndex = _allItems.indexWhere((i) => i.id == item.id);
+    final parkedIndex = _parked.indexWhere((i) => i.id == item.id);
+    if (allIndex == -1) return;
+
+    if (parkedIndex != -1) {
+      _listKey.currentState?.removeItem(
+        parkedIndex,
+        (context, animation) => _removalTransition(item, animation),
+        duration: const Duration(milliseconds: 280),
+      );
+    }
+    setState(() {
+      _allItems.removeAt(allIndex);
+      if (parkedIndex != -1) _parked.removeAt(parkedIndex);
+    });
+    _save();
+
+    _showSnack(
+      'Removed.',
+      undo: () => _undoDelete(item, allIndex, parkedIndex),
+    );
+  }
+
+  void _undoDelete(NotTodayItem item, int allIndex, int parkedIndex) {
+    setState(() {
+      _allItems.insert(allIndex.clamp(0, _allItems.length), item);
+      if (parkedIndex != -1) {
+        final at = parkedIndex.clamp(0, _parked.length);
+        _parked.insert(at, item);
+        _listKey.currentState?.insertItem(at);
+      }
+    });
+    _save();
   }
 
   /// Slide an item back into the visible list at its parked-order position.
@@ -238,21 +348,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (index != -1) {
       _listKey.currentState?.removeItem(
         index,
-        (context, animation) => SizeTransition(
-          sizeFactor: animation,
-          child: FadeTransition(
-            opacity: animation,
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: ParkedItemCard(
-                item: item,
-                onPostpone: () {},
-                onDone: () {},
-                onLetGo: () {},
-              ),
-            ),
-          ),
-        ),
+        (context, animation) => _removalTransition(item, animation),
         duration: const Duration(milliseconds: 280),
       );
       setState(() => _parked.removeAt(index));
@@ -262,21 +358,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     // Grace period: for a few seconds the release can be taken back. Nothing
     // is ever really gone by accident.
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.hideCurrentSnackBar();
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          kind == ReleaseKind.done
-              ? 'Done. Off your mind. 🎉'
-              : "Let go. That's allowed.",
-        ),
-        duration: const Duration(seconds: 3),
-        action: SnackBarAction(
-          label: 'Undo',
-          onPressed: () => _repark(released.bringBack()),
-        ),
-      ),
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    _showSnack(
+      kind == ReleaseKind.done ? 'Done. Off your mind. 🎉' : "Let go. That's allowed.",
+      undo: () => _repark(released.bringBack()),
     );
   }
 
@@ -289,12 +374,69 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  void _openReminderSheet() {
+  void _openSettings() {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => ReminderSheet(reminder: _reminder),
+      builder: (_) => SettingsSheet(
+        reminder: _reminder,
+        onExport: _exportBackup,
+        onImport: _importBackup,
+      ),
+    );
+  }
+
+  /// Write the whole list (parked + recent history) to a file the user picks
+  /// a home for.
+  Future<void> _exportBackup() async {
+    try {
+      final uri = await _backup.export(_allItems);
+      if (!mounted) return;
+      if (uri != null) _showSnack('Backup saved. Keep it somewhere safe.');
+    } catch (e) {
+      if (!mounted) return;
+      _showSnack("Couldn't save the backup.");
+    }
+  }
+
+  /// Fold a picked backup into the live list. Imported items override their
+  /// old selves; purely imported ones join the end.
+  Future<void> _importBackup() async {
+    final BackupContents? picked;
+    try {
+      picked = await _backup.import();
+    } on FormatException {
+      if (!mounted) return;
+      _showSnack("That file didn't look like a Not Today backup.");
+      return;
+    } catch (e) {
+      if (!mounted) return;
+      _showSnack("Couldn't read that backup.");
+      return;
+    }
+    if (picked == null) return;
+    // A promoted local: closures below can't see the promotion.
+    final contents = picked;
+    if (contents.items.isEmpty) {
+      _showSnack('Nothing readable in that backup.');
+      return;
+    }
+
+    setState(() {
+      _allItems = BackupService.merge(_allItems, contents.items);
+      _parked = _allItems.where(_visibleNow).toList();
+      _listKey = GlobalKey<AnimatedListState>();
+    });
+    await _save();
+    _scheduleReturnRefresh();
+
+    final skipped = contents.skipped;
+    _showSnack(
+      skipped > 0
+          ? 'Restored ${contents.items.length} · $skipped unreadable skipped.'
+          : 'Restored ${contents.items.length} '
+              'thing${contents.items.length == 1 ? '' : 's'}.',
     );
   }
 
@@ -333,15 +475,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       ),
                       const Spacer(),
                       IconButton(
-                        onPressed: _openReminderSheet,
-                        tooltip: 'Morning nudge',
+                        onPressed: _openSettings,
+                        tooltip: 'Settings',
                         padding: const EdgeInsets.all(6),
                         constraints: const BoxConstraints(
                           minWidth: 34,
                           minHeight: 34,
                         ),
                         icon: Icon(
-                          Icons.notifications_none_rounded,
+                          Icons.tune_rounded,
                           size: 20,
                           color: colors.onSurfaceVariant,
                         ),
@@ -387,6 +529,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
             ),
             const SizedBox(height: 6),
+            if (!_loading && _restingItems.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
+                child: RestingPanel(
+                  items: _restingItems,
+                  onBringBack: _bringBackToday,
+                ),
+              ),
             Expanded(
               child: _loading
                   ? const SizedBox.shrink()
@@ -417,6 +567,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 onDone: () => _release(item, ReleaseKind.done),
                                 onLetGo: () =>
                                     _release(item, ReleaseKind.letGo),
+                                onEdit: () => _editItem(item),
+                                onDelete: () => _deleteItem(item),
                               ),
                             ),
                           ),

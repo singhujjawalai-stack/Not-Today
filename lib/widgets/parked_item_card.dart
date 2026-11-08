@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import '../models/not_today_item.dart';
 
 /// A parked item. Tapping it gently expands it in place to reveal the three
-/// quiet exits: "Not today", "I did it", and "Let it go".
+/// quiet exits: "Not today", "I did it", and "Let it go" — with Edit and
+/// Remove kept below them, visually quieter.
 class ParkedItemCard extends StatefulWidget {
   const ParkedItemCard({
     super.key,
@@ -10,12 +12,16 @@ class ParkedItemCard extends StatefulWidget {
     required this.onPostpone,
     required this.onDone,
     required this.onLetGo,
+    required this.onEdit,
+    required this.onDelete,
   });
 
   final NotTodayItem item;
   final VoidCallback onPostpone;
   final VoidCallback onDone;
   final VoidCallback onLetGo;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
 
   @override
   State<ParkedItemCard> createState() => _ParkedItemCardState();
@@ -116,6 +122,24 @@ class _ParkedItemCardState extends State<ParkedItemCard> {
                     labelColor: colors.onSurfaceVariant,
                     onTap: widget.onLetGo,
                   ),
+                  // Management, not momentum: quieter than the exits above,
+                  // separated by the same hairline the exits use.
+                  Divider(height: 14, thickness: 1, color: colors.outline),
+                  Row(
+                    children: [
+                      _QuietAction(
+                        icon: Icons.edit_outlined,
+                        label: 'Edit',
+                        onTap: widget.onEdit,
+                      ),
+                      const SizedBox(width: 8),
+                      _QuietAction(
+                        icon: Icons.delete_outline_rounded,
+                        label: 'Remove',
+                        onTap: widget.onDelete,
+                      ),
+                    ],
+                  ),
                 ],
               ],
             ),
@@ -170,7 +194,10 @@ class _ActionRow extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
 
     return InkWell(
-      onTap: onTap,
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
       borderRadius: BorderRadius.circular(12),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 9),
@@ -191,6 +218,50 @@ class _ActionRow extends StatelessWidget {
               style: textTheme.bodyMedium?.copyWith(
                 color: labelColor,
                 fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The quiet management row: Edit and Remove. Smaller and muted on purpose —
+/// they're housekeeping, not the three exits.
+class _QuietAction extends StatelessWidget {
+  const _QuietAction({required this.icon, required this.label, required this.onTap});
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return InkWell(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
+      borderRadius: BorderRadius.circular(10),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 16,
+              color: colors.onSurfaceVariant.withValues(alpha: 0.85),
+            ),
+            const SizedBox(width: 7),
+            Text(
+              label,
+              style: textTheme.bodyMedium?.copyWith(
+                fontSize: 13,
+                color: colors.onSurfaceVariant,
               ),
             ),
           ],
